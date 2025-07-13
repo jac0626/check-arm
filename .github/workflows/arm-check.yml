@@ -1,18 +1,42 @@
-name: ARM Check
+# .github/workflows/arm-check.yml
 
+# Workflow 的名称，会显示在 GitHub Actions 的界面上
+name: Check ARM CPU Architecture
+
+# 定义触发此 workflow 的事件
 on:
+  # 当有代码推送到 main 分支时
   push:
-    branches: [ main ]
+    branches:
+      - main
+  
+  # 当有拉取请求指向 main 分支时
+  pull_request:
+    branches:
+      - main
 
+  # 允许您在 GitHub Actions UI 中手动触发此 workflow
+  workflow_dispatch:
+
+# 定义一个或多个 job (任务)
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  # job 的唯一 ID
+  check-arm-cpu:
+    # job 的名称，会显示在 GitHub Actions 的界面上
+    name: Run on ARM and show CPU info
+
+    # 这是最关键的一步：指定运行此 job 的虚拟机环境
+    # ubuntu-latest-arm64 表示使用最新的、基于 ARM64 架构的 Ubuntu 系统
+    runs-on: ubuntu-latest-arm64
+
+    # 定义 job 中的一系列步骤
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v2
-      with:
-        platforms: arm64
-    - name: Run on ARM
-      run: |
-        docker run --rm --platform linux/arm64 alpine:latest lscpu
+      # 第一步：检出代码库
+      # 这是标准操作，以便后续步骤可以访问您的代码文件
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 第二步：显示 CPU 信息
+      # 运行 lscpu 命令并将其输出打印到日志中
+      - name: Display CPU Information
+        run: lscpu
