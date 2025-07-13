@@ -1,0 +1,18 @@
+name: ARM Check
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v2
+      with:
+        platforms: arm64
+    - name: Run on ARM
+      run: |
+        docker run --rm --platform linux/arm64 alpine:latest lscpu
