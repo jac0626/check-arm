@@ -27,7 +27,7 @@ jobs:
 
     # 这是最关键的一步：指定运行此 job 的虚拟机环境
     # ubuntu-latest-arm64 表示使用最新的、基于 ARM64 架构的 Ubuntu 系统
-    runs-on: ubuntu-latest-arm64
+    runs-on: ubuntu-22.04-arm
 
     # 定义 job 中的一系列步骤
     steps:
@@ -38,5 +38,8 @@ jobs:
 
       # 第二步：显示 CPU 信息
       # 运行 lscpu 命令并将其输出打印到日志中
-      - name: Display CPU Information
-        run: lscpu
+      - name: complie
+        run: g++ -march=armv8-a+sve -o get_sve_length main.cpp
+         
+      - name: run
+        run: ./get_sve_length
