@@ -43,3 +43,7 @@ jobs:
          
       - name: run
         run: ./get_sve_length
+
+      - name: display
+        run: lscpu
+  
