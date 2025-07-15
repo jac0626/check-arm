@@ -69,7 +69,7 @@ multiply_accumulate_u16_sve2(const uint16_t* vec1, const uint16_t* vec2, uint64_
         // - "_m" 表示这个操作是受谓词pg控制的（masked）。
         //
         // 这个指令优雅地处理了从低精度到高精度的转换和计算。
-        sum_vec = svmlalt_u32_m(pg, sum_vec, v1_u16, v2_u16);
+        sum_vec = svmlalt_u32(pg, sum_vec, v1_u16, v2_u16);
 
         // 步进到下一个向量块
         i += step;
