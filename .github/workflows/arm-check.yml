@@ -39,7 +39,7 @@ jobs:
       # 第二步：显示 CPU 信息
       # 运行 lscpu 命令并将其输出打印到日志中
       - name: complie
-        run: g++ -march=armv8-a+sve -o get_sve_length main.cpp
+        run: g++ -march=armv8-a+sve2 -o get_sve_length main.cpp
          
       - name: run
         run: ./get_sve_length
