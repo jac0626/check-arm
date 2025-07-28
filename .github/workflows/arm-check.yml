@@ -35,7 +35,11 @@ jobs:
       # 这是标准操作，以便后续步骤可以访问您的代码文件
       - name: Checkout repository
         uses: actions/checkout@v4
-
+      - name: complie
+        run: g++ -march=armv8-a+sve -o get_sve_length main.cpp
+         
+      - name: run
+        run: ./get_sve_length
       - name: display
         run: lscpu
   
