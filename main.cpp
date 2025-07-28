@@ -21,7 +21,7 @@ void test_ffr_granularity() {
     printf("页边界地址: %p\n\n", (char*)mem + page_size);
     
     // 测试不同偏移量的32位加载
-    for (int offset = 16; offset >= 0; offset -= 4) {
+    for (int offset = 16; offset >0; offset -= 4) {
         printf("测试 %d: 从页边界前 %d 字节开始加载32位元素\n", 
                (16 - offset) / 4 + 1, offset);
         
