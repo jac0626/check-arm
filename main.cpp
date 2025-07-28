@@ -1,151 +1,129 @@
 #include <arm_sve.h>
-#include <iostream>
-#include <vector>
-#include <memory>
-#include <cstring>
+#include <stdio.h>
 #include <sys/mman.h>
-#include <stdexcept>
-#include <iomanip>
+#include <stdint.h>
+#include <string.h>
 
-class SVEMemoryTester {
-private:
-    static constexpr size_t PAGE_SIZE = 4096;
-    void* mem_base;
-    size_t total_size;
-    const int vector_length;
+void test_ffr_granularity() {
+    size_t page_size = 4096;
     
-public:
-    SVEMemoryTester() : mem_base(nullptr), total_size(PAGE_SIZE * 2), 
-                        vector_length(svcntw()) {
-        // 分配内存
-        mem_base = mmap(nullptr, total_size, PROT_READ | PROT_WRITE,
-                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        
-        if (mem_base == MAP_FAILED) {
-            throw std::runtime_error("内存映射失败");
-        }
-    }
+    // 分配两页内存
+    void *mem = mmap(NULL, page_size * 2, PROT_READ | PROT_WRITE, 
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     
-    ~SVEMemoryTester() {
-        if (mem_base && mem_base != MAP_FAILED) {
-            munmap(mem_base, total_size);
-        }
-    }
+    // 初始化第一页
+    memset(mem, 0xAA, page_size);
     
-    // 禁用拷贝构造和赋值操作
-    SVEMemoryTester(const SVEMemoryTester&) = delete;
-    SVEMemoryTester& operator=(const SVEMemoryTester&) = delete;
+    // 保护第二页
+    mprotect((char*)mem + page_size, page_size, PROT_NONE);
     
-    void run_test() {
-        std::cout << "SVE向量长度: " << vector_length << "个32位元素\n\n";
-        
-        // 准备测试数据
-        prepare_test_data();
-        
-        // 执行测试
-        test_first_faulting_load();
-        std::cout << std::endl;
-        test_non_faulting_load();
-        
-        std::cout << "\n关键区别：两种指令都能处理越界访问，但首故障加载\n";
-        std::cout << "在第一个元素无效时会触发真正的故障。\n";
-    }
+    printf("=== SVE FFR粒度测试 ===\n");
+    printf("页边界地址: %p\n\n", (char*)mem + page_size);
     
-private:
-    void prepare_test_data() {
-        const size_t data_size = sizeof(float) * vector_length;
+    // 测试不同偏移量的32位加载
+    for (int offset = 16; offset >= 0; offset -= 4) {
+        printf("测试 %d: 从页边界前 %d 字节开始加载32位元素\n", 
+               (16 - offset) / 4 + 1, offset);
         
-        // 将数据放在第一页的末尾，这样向量加载会跨越页边界
-        float* data = reinterpret_cast<float*>(
-            static_cast<char*>(mem_base) + PAGE_SIZE - data_size/2
-        );
+        float *ptr = (float*)((char*)mem + page_size - offset);
+        printf("  加载地址: %p\n", ptr);
         
-        // 初始化可访问的部分
-        for (int i = 0; i < vector_length/2; ++i) {
-            data[i] = static_cast<float>(i + 10.0f);
-        }
-        
-        // 使第二页不可访问
-        if (mprotect(static_cast<char*>(mem_base) + PAGE_SIZE, 
-                     PAGE_SIZE, PROT_NONE) != 0) {
-            throw std::runtime_error("设置内存保护失败");
-        }
-        
-    }
-    
-    void test_first_faulting_load() {
-        std::cout << "=== 首故障加载测试 ===\n";
-        
-        const float* data = reinterpret_cast<float*>(
-            static_cast<char*>(mem_base) + PAGE_SIZE - 
-            sizeof(float) * vector_length / 2
-        );
-        
-        svbool_t all_true = svptrue_b32();
-        
-        // 设置首故障寄存器
         svsetffr();
+        svfloat32_t result = svldff1_f32(svptrue_b32(), ptr);
+        svbool_t ffr = svrdffr();
+        uint32_t ffr_val = *(uint32_t*)&ffr;
         
-        // 执行首故障加载
-        svfloat32_t result = svldff1_f32(all_true, data);
-        svbool_t ffr_status = svrdffr();
+        printf("  FFR: 0x%08x = ", ffr_val);
+        for (int i = 15; i >= 0; i--) {
+            printf("%d", (ffr_val >> i) & 1);
+            if (i % 4 == 0 && i > 0) printf(" ");
+        }
         
-        std::cout << "加载完成，检查结果：\n";
-        print_results(result, ffr_status);
-    }
-    
-    void test_non_faulting_load() {
-        std::cout << "=== 非故障加载测试 ===\n";
+        // 计算有效位数
+        int valid_bits = __builtin_popcount(ffr_val & 0xFFFF);
+        printf("\n  有效位数: %d", valid_bits);
         
-        const float* data = reinterpret_cast<float*>(
-            static_cast<char*>(mem_base) + PAGE_SIZE - 
-            sizeof(float) * vector_length / 2
-        );
-        
-        svbool_t all_true = svptrue_b32();
-        
-        // 设置首故障寄存器
-        svsetffr();
-        
-        // 执行非故障加载
-        svfloat32_t result = svldnf1_f32(all_true, data);
-        svbool_t ffr_status = svrdffr();
-        
-        std::cout << "加载完成，检查结果：\n";
-        print_results(result, ffr_status);
-    }
-    
-    void print_results(svfloat32_t result, svbool_t ffr_status) {
-        svbool_t all_true = svptrue_b32();
-        std::vector<float> buffer(vector_length);
-        
-        // 存储结果到缓冲区
-        svst1_f32(all_true, buffer.data(), result);
-        
-        // 打印每个元素的状态
-        for (int i = 0; i < vector_length; ++i) {
-            svbool_t element_mask = svwhilelt_b32(i, i + 1);
-            svbool_t valid_mask = svand_z(all_true, ffr_status, element_mask);
+        // 分析
+        if (offset > 0) {
+            int expected_elements = offset / 4;  // 能完整加载的32位元素数
+            int expected_bytes = offset;         // 可访问的字节数
+            printf("\n  期望(按元素): %d 个1", expected_elements);
+            printf("\n  期望(按字节): %d 个1", expected_bytes);
             
-            if (svptest_any(all_true, valid_mask)) {
-                std::cout << "  元素[" << std::setw(2) << i << "]: " 
-                         << std::fixed << std::setprecision(1) 
-                         << buffer[i] << " (有效)\n";
-            } else {
-                std::cout << "  元素[" << std::setw(2) << i << "]: ? (无效)\n";
+            if (valid_bits == expected_bytes && valid_bits != expected_elements) {
+                printf("\n  >>> FFR似乎是按字节计算！");
+            } else if (valid_bits == expected_elements) {
+                printf("\n  >>> FFR是按元素计算");
             }
         }
+        printf("\n\n");
     }
-};
+    
+    // 测试8位加载作为对比
+    printf("=== 8位加载对比测试 ===\n");
+    for (int offset = 4; offset >= 0; offset--) {
+        printf("从页边界前 %d 字节开始加载8位元素\n", offset);
+        
+        uint8_t *ptr = (uint8_t*)((char*)mem + page_size - offset);
+        
+        svsetffr();
+        svuint8_t result = svldff1_u8(svptrue_b8(), ptr);
+        svbool_t ffr = svrdffr();
+        uint32_t ffr_val = *(uint32_t*)&ffr;
+        
+        printf("  FFR: 0x%08x = ", ffr_val);
+        for (int i = 7; i >= 0; i--) {
+            printf("%d", (ffr_val >> i) & 1);
+        }
+        
+        int valid_bits = __builtin_popcount(ffr_val & 0xFF);
+        printf("\n  有效位数: %d (期望: %d)\n\n", valid_bits, offset);
+    }
+    
+    // 测试不同大小元素的FFR行为
+    printf("=== 不同元素大小的FFR测试 ===\n");
+    printf("从页边界前8字节开始加载：\n");
+    
+    void *test_ptr = (char*)mem + page_size - 8;
+    svbool_t ffr_temp;
+    
+    // 8位元素
+    svsetffr();
+    svldff1_u8(svptrue_b8(), (uint8_t*)test_ptr);
+    ffr_temp = svrdffr();
+    uint32_t ffr8_val = *(uint32_t*)&ffr_temp;
+    printf("  8位元素 FFR: 0x%08x (%d个1)\n", ffr8_val, __builtin_popcount(ffr8_val));
+    
+    // 16位元素
+    svsetffr();
+    svldff1_u16(svptrue_b16(), (uint16_t*)test_ptr);
+    ffr_temp = svrdffr();
+    uint32_t ffr16_val = *(uint32_t*)&ffr_temp;
+    printf("  16位元素 FFR: 0x%08x (%d个1)\n", ffr16_val, __builtin_popcount(ffr16_val));
+    
+    // 32位元素
+    svsetffr();
+    svldff1_f32(svptrue_b32(), (float*)test_ptr);
+    ffr_temp = svrdffr();
+    uint32_t ffr32_val = *(uint32_t*)&ffr_temp;
+    printf("  32位元素 FFR: 0x%08x (%d个1)\n", ffr32_val, __builtin_popcount(ffr32_val));
+    
+    // 64位元素
+    svsetffr();
+    svldff1_f64(svptrue_b64(), (double*)test_ptr);
+    ffr_temp = svrdffr();
+    uint32_t ffr64_val = *(uint32_t*)&ffr_temp;
+    printf("  64位元素 FFR: 0x%08x (%d个1)\n", ffr64_val, __builtin_popcount(ffr64_val));
+    
+    munmap(mem, page_size * 2);
+}
 
 int main() {
-    try {
-        SVEMemoryTester tester;
-        tester.run_test();
-    } catch (const std::exception& e) {
-        std::cerr << "错误: " << e.what() << std::endl;
-        return 1;
-    }
+    printf("SVE向量长度: %ld 字节\n", svcntb());
+    printf("32位元素数: %ld\n", svcntw());
+    printf("64位元素数: %ld\n\n", svcntd());
+    
+    test_ffr_granularity();
     
     return 0;
 }
