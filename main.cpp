@@ -61,7 +61,7 @@ void test_ffr_granularity() {
     
     // 测试8位加载作为对比
     printf("=== 8位加载对比测试 ===\n");
-    for (int offset = 4; offset >= 0; offset--) {
+    for (int offset = 4; offset > 0; offset--) {
         printf("从页边界前 %d 字节开始加载8位元素\n", offset);
         
         uint8_t *ptr = (uint8_t*)((char*)mem + page_size - offset);
