@@ -36,7 +36,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: complie
-        run: g++ -march=armv8-a+sve -o get_sve_length main.cpp
+        run: g++ -march=armv8.6-a+sve+f64mm -std=c++17 -lpthread -o get_sve_length main.cpp
          
       - name: run
         run: ./get_sve_length
