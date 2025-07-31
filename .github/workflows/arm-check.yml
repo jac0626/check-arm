@@ -1,5 +1,4 @@
 # .github/workflows/arm-check.yml
-
 # Workflow 的名称，会显示在 GitHub Actions 的界面上
 name: Check ARM CPU Architecture
 
@@ -14,7 +13,7 @@ on:
   pull_request:
     branches:
       - main
-
+  
   # 允许您在 GitHub Actions UI 中手动触发此 workflow
   workflow_dispatch:
 
@@ -24,22 +23,54 @@ jobs:
   check-arm-cpu:
     # job 的名称，会显示在 GitHub Actions 的界面上
     name: Run on ARM and show CPU info
-
+    
     # 这是最关键的一步：指定运行此 job 的虚拟机环境
     # ubuntu-latest-arm64 表示使用最新的、基于 ARM64 架构的 Ubuntu 系统
     runs-on: ubuntu-22.04-arm
-
+    
     # 定义 job 中的一系列步骤
     steps:
       # 第一步：检出代码库
       # 这是标准操作，以便后续步骤可以访问您的代码文件
       - name: Checkout repository
         uses: actions/checkout@v4
+      
       - name: complie
         run: g++ -march=native -std=c++17 -lpthread -o get_sve_length main.cpp
-         
+        
       - name: run
         run: ./get_sve_length
-      - name: display
+      
+      - name: display CPU info
         run: lscpu
-  
+      
+      # 新增：显示内存信息
+      - name: Display memory info (summary)
+        run: |
+          echo "=== Memory Summary ==="
+          free -h
+          echo ""
+          echo "=== Memory Usage Details ==="
+          free -m
+      
+      - name: Display detailed memory info
+        run: |
+          echo "=== Detailed Memory Information ==="
+          cat /proc/meminfo | head -20
+          echo ""
+          echo "=== Memory Blocks ==="
+          lsmem || echo "lsmem command not available"
+      
+      - name: Display system info including memory
+        run: |
+          echo "=== System Information ==="
+          uname -a
+          echo ""
+          echo "=== Total Memory ==="
+          grep MemTotal /proc/meminfo
+          echo ""
+          echo "=== Available Memory ==="
+          grep MemAvailable /proc/meminfo
+          echo ""
+          echo "=== Memory by Type ==="
+          vmstat -s | grep -E "total memory|used memory|free memory|buffer memory|cache"
