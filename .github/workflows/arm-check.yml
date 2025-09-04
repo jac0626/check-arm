@@ -35,7 +35,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-  
+      - name: complie
+        run: g++ -march=native -o get_sve_length main.cpp
+         
+      - name: run
+        run: ./get_sve_length
       
       - name: display CPU info
         run: lscpu
